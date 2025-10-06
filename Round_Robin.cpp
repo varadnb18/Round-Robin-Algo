@@ -1,3 +1,12 @@
+/* ✅ My Recommendation
+Stick with a single ready queue for simplicity if this is for learning, assignments, or single-core simulation.
+Use both ready & running queues if you plan to:
+Visualize the CPU scheduler (ready queue + running process on screen).
+Extend the simulation to multiple CPUs or more complex scheduling (like adding I/O queues).
+*/
+
+
+
 #include <iostream>
 #include <queue>
 #include <vector>
@@ -36,21 +45,31 @@ public:
     RoundRobin(vector<Process> p, int tq, int cs) : processes(p), timeQuantum(tq), contextSwitchTime(cs) {}
 
     void schedule() {
-        queue<int> q;
+        queue<int> readyQueue;    // Processes ready to execute
+        queue<int> runningQueue;  // Currently executing process (size = 1)
         int time = 0, completed = 0;
         vector<bool> inQueue(processes.size(), false);
 
         sort(processes.begin(), processes.end(), [](Process &a, Process &b) { return a.arrivalTime < b.arrivalTime; });
 
-        q.push(0);
+        readyQueue.push(0);
         inQueue[0] = true;
 
         cout << "\n========== ROUND ROBIN CPU SCHEDULING START ==========\n";
 
-        while (!q.empty()) {
-            int i = q.front();
-            q.pop();
+        while (!readyQueue.empty() || !runningQueue.empty()) {
 
+            // Move process from ready to running if CPU is idle
+            if (runningQueue.empty() && !readyQueue.empty()) {
+                int current = readyQueue.front();
+                readyQueue.pop();
+                runningQueue.push(current);
+            }
+
+            int i = runningQueue.front();
+            runningQueue.pop();
+
+            // If CPU is idle until process arrives
             if (time < processes[i].arrivalTime) {
                 totalIdleTime += (processes[i].arrivalTime - time);
                 time = processes[i].arrivalTime;
@@ -58,10 +77,11 @@ public:
 
             int execTime = min(timeQuantum, processes[i].remainingTime);
             cout << "CPU executing P" << processes[i].pid << " from time " << time << " to " << time + execTime << "\n";
-            ganttChart.push_back({processes[i].pid, time}); 
+            ganttChart.push_back({processes[i].pid, time});
             time += execTime + contextSwitchTime;
             processes[i].remainingTime -= execTime;
 
+            // If process finished, calculate completion/turnaround/waiting times
             if (processes[i].remainingTime == 0) {
                 processes[i].completionTime = time - contextSwitchTime;
                 processes[i].turnaroundTime = processes[i].completionTime - processes[i].arrivalTime;
@@ -70,21 +90,24 @@ public:
                 completed++;
             }
 
+            // Check for newly arrived processes and add them to readyQueue
             for (int j = 0; j < processes.size(); j++) {
                 if (!inQueue[j] && processes[j].arrivalTime <= time && processes[j].remainingTime > 0) {
-                    q.push(j);
+                    readyQueue.push(j);
                     inQueue[j] = true;
                 }
             }
 
+            // If process not finished, add it back to readyQueue
             if (processes[i].remainingTime > 0) {
-                q.push(i);
+                readyQueue.push(i);
             }
 
-            if (q.empty() && completed < processes.size()) {
+            // If both queues empty but some processes remaining, push next arriving process
+            if (readyQueue.empty() && runningQueue.empty() && completed < processes.size()) {
                 for (int j = 0; j < processes.size(); j++) {
                     if (processes[j].remainingTime > 0) {
-                        q.push(j);
+                        readyQueue.push(j);
                         inQueue[j] = true;
                         break;
                     }
